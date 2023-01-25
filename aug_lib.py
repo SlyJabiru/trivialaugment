@@ -256,7 +256,7 @@ def _solarize_impl(pil_img, level):
     A PIL Image that has had Solarize applied to it.
   """
     level = int_parameter(level, min_max_vals.solarize.max)
-    return ImageOps.solarize(pil_img, 256 - level)
+    return ImageOps.solarize(pil_img, 256 - level) # 256 - level 보다 큰 건 다 inverted. level 이 크면, 바뀌는 픽셀이 더 많아짐.
 
 
 solarize = TransformT('Solarize', _solarize_impl)
@@ -362,19 +362,74 @@ def blend(img1, v):
 sample_pairing = TransformT('SamplePairing', blend)
 
 
+# set_augmentation_space(C.get().get('augmentation_search_space', 'standard'), C.get().get('augmentation_parameter_max', 30), C.get().get('custom_search_space_augs', None))
 def set_augmentation_space(augmentation_space, num_strengths, custom_augmentation_space_augs=None):
     global ALL_TRANSFORMS, min_max_vals, PARAMETER_MAX
     assert num_strengths > 0
     PARAMETER_MAX = num_strengths - 1
-    if 'wide' in augmentation_space:
+
+    if 'only_hard_from_huge' in augmentation_space:
         min_max_vals = MinMaxVals(
-            shear=MinMax(.0, .99),
+            shear=MinMax(15., 30.),
+            translate=MinMax(16, 32),
+            rotate=MinMax(90, 180),
+            solarize=MinMax(128, 256),
+            posterize=MinMax(5, 8),
+            enhancer=MinMax(30, 60.),
+            cutout=MinMax(0.5, .9),
+        )
+    elif 'only_hard_from_wide' in augmentation_space:
+        min_max_vals = MinMaxVals(
+            shear=MinMax(.5, .99),
+            translate=MinMax(16, 32),
+            rotate=MinMax(67, 135),
+            solarize=MinMax(128, 256),
+            posterize=MinMax(5, 8),
+            enhancer=MinMax(1.5, 2.),
+            cutout=MinMax(.3, .6),
+        )
+    elif 'huge' in augmentation_space:
+        min_max_vals = MinMaxVals(
+            shear=MinMax(.0, 30.),
             translate=MinMax(0, 32),
-            rotate=MinMax(0, 135),
+            rotate=MinMax(0, 180),
             solarize=MinMax(0, 256),
-            posterize=MinMax(2, 8),
-            enhancer=MinMax(.01, 2.),
-            cutout=MinMax(.0, .6),
+            posterize=MinMax(1, 8),
+            enhancer=MinMax(.01, 60.),
+            cutout=MinMax(.0, .9),
+        )
+    elif 'wide' in augmentation_space:
+            # TODO: 여기를 건드리면, wide_standard 의 augmentation_search_space 를 건드릴 수 있음.
+        min_max_vals = MinMaxVals(
+            shear=MinMax(.0, .99), # 더 크게 해도 됨!!!
+            translate=MinMax(0, 32), # 더 크게 해도 됨. cifar 에서는 이미 max.
+            rotate=MinMax(0, 135), # 더 크게 해도 됨
+            solarize=MinMax(0, 256), # 이미 max.
+            posterize=MinMax(2, 8), # 몇 개 비트만 남기고 싶은가? level 이 클 수록, 비트가 조금 남음.
+            enhancer=MinMax(.01, 2.), # 더 크게 해도 됨.
+            cutout=MinMax(.0, .6), # max 를 더 키우면, 더 강한 aug 임.
+        )
+    elif 'narrow' in augmentation_space:
+        print('============= narrow in set_augmentation_space() =============')
+        min_max_vals = MinMaxVals(
+            shear=MinMax(.0, .15),
+            translate=MinMax(0, 5),
+            rotate=MinMax(0, 15),
+            solarize=MinMax(0, 128),
+            posterize=MinMax(6, 8),
+            enhancer=MinMax(.1, 1.0),
+            cutout=MinMax(.0, .1),
+        )
+    elif 'tiny' in augmentation_space:
+        print('============= tiny in set_augmentation_space() =============')
+        min_max_vals = MinMaxVals(
+            shear=MinMax(.0, .075),
+            translate=MinMax(0, 2.5),
+            rotate=MinMax(0, 7.5),
+            solarize=MinMax(0, 64),
+            posterize=MinMax(7, 8),
+            enhancer=MinMax(.1, 0.55),
+            cutout=MinMax(.0, .05),
         )
     elif ('uniaug' in augmentation_space) or ('randaug' in augmentation_space):
         min_max_vals = MinMaxVals(
@@ -391,7 +446,8 @@ def set_augmentation_space(augmentation_space, num_strengths, custom_augmentatio
             posterize=MinMax(4, 8),
             translate=MinMax(0, 70)
         )
-    elif 'fix' in augmentation_space:
+    elif 'fix' in augmentation_space: # fixed_standard drops in here!
+        # TODO: 여긴 fixed standard?
         min_max_vals = MinMaxVals(
             posterize=MinMax(4, 8)
         )
@@ -605,6 +661,7 @@ def set_augmentation_space(augmentation_space, num_strengths, custom_augmentatio
     else:
         if 'standard' not in augmentation_space:
             raise ValueError(f"Unknown search space {augmentation_space}")
+        # fix_standard, wide_standard use this ALL_TRANSFORMS
         ALL_TRANSFORMS = [
             identity,
             auto_contrast,
@@ -664,6 +721,7 @@ class UniAugment:
 
 
 class UniAugmentWeighted:
+    # TrivialAugment (TA) uses this class!
     def __init__(self, n, probs):
         self.n = n
         self.probs = probs  # [prob of zero augs, prob of one aug, ..]

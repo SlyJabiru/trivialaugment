@@ -30,12 +30,23 @@ def get_last_metric(path, metric, get_step=None):
     return v, last_point
 
 def get_results(logdir, mypath, split='test', metric='top1', assert_step=None):
+    print(f'logdir: {logdir}')
+    print(f'mypath: {mypath}')
+    print(f'split: {split}')
+
     mypath = mypath.split('/')[-1]
     suffix = '.yaml'
     if mypath.endswith(suffix):
         mypath = mypath[:-len(suffix)]
-    paths = [path for path in listdir(logdir) if re.search(f'{mypath}(_[0-9]+try|).yaml', path)]
-    print([path[len(mypath):] for path in paths])
+
+    print(f'mypath: {mypath}') # wresnet28x10_cifar100_b128_maxlr.1_ta_huge_nowarmup_200epochs
+    # print(listdir(logdir))
+
+    # mypath 를 path 에서 찾는 건가?
+    # paths = [path for path in listdir(logdir) if re.search(f'{mypath}(_[0-9]+try|).yaml', path)]
+    paths = [path for path in listdir(logdir) if re.search(f'{mypath}(_[0-9]+try|)', path)]
+    print(paths)
+    # print([path[len(mypath):] for path in paths])
 
     paths = [join(join(logdir, path), split) for path in paths]
     results = [get_last_metric(path, metric, get_step=assert_step) for path in paths]
@@ -53,15 +64,21 @@ def get_results(logdir, mypath, split='test', metric='top1', assert_step=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Get Top1 Results.')
-    parser.add_argument('path',
+    parser.add_argument('--path',
                    help='Prefix of the paths/conf files for the runs to evaluate.')
     parser.add_argument('--logdir', default='logs')
     parser.add_argument('--split', default='test')
     parser.add_argument('--metric', default='top1', help='Can be e.g. top1, top5, loss, eval_top1')
     parser.add_argument('--step', default=None, type=int)
     args = parser.parse_args()
+    # wresnet28x10_cifar100_b128_maxlr.1_ta_fix_nowarmup_200epochs_000try
+    # 
+
+    # print(args.path)
+    # print(args.path.split('/'))
     mypath = args.path.split('/')[-1]
-    results = get_results(args.logdir,args.path,args.split,args.metric, assert_step=args.step)
+    # print(mypath)
+    results = get_results(args.logdir, args.path, args.split, args.metric, assert_step=args.step)
     n = len(results)
     m, se = np.mean(results), st.sem(results)
     confidence = .95

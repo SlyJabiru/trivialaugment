@@ -142,6 +142,7 @@ def train_and_eval(rank, worldsize, tag, dataroot, test_ratio=0.0, cv_fold=0, re
     os.makedirs('./logs/', exist_ok=True)
     writers = [SummaryWriter(log_dir='./logs/%s/%s' % (tag, x)) for x in ['train', 'valid', 'test', 'testtrain']]
 
+    # set_augmentation_space(augmentation_space, num_strengths, custom_augmentation_space_augs=None)
     aug_lib.set_augmentation_space(C.get().get('augmentation_search_space', 'standard'), C.get().get('augmentation_parameter_max', 30), C.get().get('custom_search_space_augs', None))
     max_epoch = C.get()['epoch']
     trainsampler, trainloader, validloader, testloader_, testtrainloader_, dataset_info = get_dataloaders(C.get()['dataset'], C.get()['batch'], dataroot, test_ratio, split_idx=cv_fold, distributed=worldsize>1, started_with_spawn=C.get()['started_with_spawn'], summary_writer=writers[0])
@@ -328,10 +329,12 @@ def parse_args():
     parser.add_argument('--cv', type=int, default=0)
     parser.add_argument('--only-eval', action='store_true')
     parser.add_argument('--local_rank', default=None, type=int)
+    parser.add_argument('--seed', default=None, type=int)
     return parser.parse_args()
 
 
 def spawn_process(global_rank, worldsize, port_suffix, args, config_path=None, communicate_results_with_queue=None, local_rank=None,):
+    # print(local_rank)
     if local_rank is None:
         local_rank = global_rank
     started_with_spawn = worldsize is not None and worldsize > 0
@@ -340,10 +343,26 @@ def spawn_process(global_rank, worldsize, port_suffix, args, config_path=None, c
     print('dist info', local_rank,global_rank,worldsize)
     #communicate_results_with_queue.value = 1.
     #return
-    if config_path is not None:
-        C(config_path)
-    C.get()['started_with_spawn'] = started_with_spawn
+    # print('------')
+    # print(args.config[0])
+    # print(C)
+    # print('------')
 
+    # print(config_path)
+    if config_path is not None:
+        print(f'config path is none.')
+        print(f'update config path is: {config_path}')
+        C(config_path)
+    # elif args.config is not None:
+    #     # DANGER. OVERRIDE config_path
+    #     config_path = args.config[0]
+    #     C(config_path)
+    
+    C.get()['started_with_spawn'] = started_with_spawn
+    print(worldsize)
+    print(C.get()['gpus'])
+    print('--------')
+    # print(C.get())
     if worldsize:
         assert worldsize == C.get()['gpus'], f"Did not specify the number of GPUs in Config with which it was started: {worldsize} vs {C.get()['gpus']}"
     else:
@@ -361,8 +380,11 @@ def spawn_process(global_rank, worldsize, port_suffix, args, config_path=None, c
         #add_filehandler(logger, args.save.replace('.pth', '.log'))
 
     #logger.info(json.dumps(C.get().conf, indent=4))
-    if 'seed' in C.get():
-        seed = C.get()['seed']
+
+    # if 'seed' in C.get() or args.seed:
+    #     seed = C.get()['seed']
+    if args.seed:
+        seed = args.seed
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
         random.seed(seed)
@@ -427,6 +449,8 @@ if __name__ == '__main__':
     pre_parser.add_argument('--local_rank', default=None, type=int)
     args, _ = pre_parser.parse_known_args()
     if args.local_rank is None:
+        print('Here!!')
+        # print(parse_args())
         print("Spawning processes")
         world_size = torch.cuda.device_count()
         port_suffix = str(random.randint(10,99))
@@ -436,8 +460,10 @@ if __name__ == '__main__':
                               nprocs=world_size,
                               join=True)
         else:
+            print(f'world_size: {world_size}')
             spawn_process(0, 0, None, parse_args())
-        with open(f'/tmp/samshpopt/training_with_portsuffix_{port_suffix}.pkl', 'r') as f:
-            result = pickle.load(f)
+        # with open(f'/tmp/samshpopt/training_with_portsuffix_{port_suffix}.pkl', 'r') as f:
+        #     result = pickle.load(f)
     else:
+        print('Here!')
         spawn_process(None, -1, None, parse_args(), local_rank=args.local_rank)

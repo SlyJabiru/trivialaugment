@@ -6,11 +6,9 @@ colored
 pretrainedmodels
 tqdm
 tensorboardx
-sklearn
+scikit-learn
 matplotlib
 psutil
 requests
-torch
-torchvision
 Pillow
 tensorboard
